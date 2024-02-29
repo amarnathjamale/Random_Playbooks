@@ -1,0 +1,51 @@
+---
+- hosts: localhost
+  gather_facts: false
+  vars:
+    organization: "org_name"
+    pat: "your_personal_access_token"
+    base_git_folder: /home/amar/{{ organization }} # Path where all Azure DevOps Repos will be cloned
+  tasks:
+    - name: Fetch All Projects
+      ansible.builtin.uri:
+        url: "https://dev.azure.com/{{ organization }}/_apis/projects?api-version=5.0"
+        method: GET
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        url_username: "{{ pat }}"
+        status_code:
+          - 200
+        return_content: true
+        force_basic_auth: true
+        follow_redirects: safe
+        validate_certs: false
+      register: projects
+
+    - name: Get the list of Repositories
+      ansible.builtin.uri:
+        url: "https://dev.azure.com/{{ organization }}/{{ item.name | replace(' ', '%20')}}/_apis/git/repositories?api-version=5.0"
+        method: GET
+        headers:
+          Content-Type: "application/json"
+          Accept: "application/json"
+        url_username: "{{ pat }}"
+        status_code:
+          - 200
+        return_content: true
+        force_basic_auth: true
+        follow_redirects: safe
+        validate_certs: false
+      register: repositories
+      loop: "{{ projects.json.value }}"
+
+    - name: Clone a repo with separate git directory
+      ansible.builtin.git:
+        repo: "{{ item.remoteUrl }}"
+        ssh_opts: '-c http.extraHeader="Authorization: Basic {{ pat | b64encode }}"'
+        dest: "{{ base_git_folder }}/{{ item.project.name }}/{{ item.name }}"
+        refspec: "refs/*:refs/remotes/origin/*"
+        track_submodules: true
+      loop: "{{ repositories.results | map(attribute='json.value') | flatten(1) }}"
+      async: 10
+      poll: 0
