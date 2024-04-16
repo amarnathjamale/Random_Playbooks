@@ -38,6 +38,8 @@
         validate_certs: false
       register: repositories
       loop: "{{ projects.json.value }}"
+      loop_control:
+        label: "{{ item.name }}"
 
     - name: Clone a repo with separate git directory
       ansible.builtin.git:
@@ -47,5 +49,7 @@
         refspec: "refs/*:refs/remotes/origin/*"
         track_submodules: true
       loop: "{{ repositories.results | map(attribute='json.value') | flatten(1) }}"
+      loop_control:
+        label: "{{ item.project.name }}/{{ item.name }}"
       async: 10
       poll: 0
